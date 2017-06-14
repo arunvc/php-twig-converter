@@ -109,7 +109,7 @@ function convert_phptemplate($str)
 
     // Unsupported tokens
     $mapping = [
-        T_ARRAY, // array()
+//         T_ARRAY, // array()
         T_BREAK, // break",
         T_CASE, // , // case in a switch",
         T_CONTINUE, // ", // continue in a loop",
@@ -184,7 +184,7 @@ function convert_phptemplate($str)
                 T_MUL_EQUAL,
                 T_MINUS_EQUAL,
                 T_ISSET,
-                T_DOUBLE_ARROW,
+//                 T_DOUBLE_ARROW,
                 T_OPEN_TAG,
                 T_DOC_COMMENT, // TODO Convert to twig doc?
             ])) {
@@ -316,6 +316,7 @@ function convert_phptemplate($str)
             } elseif ($name == T_FOREACH) {
                 // foreach($iterated as $index => $value) -> for(value in iterated) _or_ for(index, value in iterated)
                 $output .= '{% for';
+                $flags[] = 'inside_foreach';
                 while (!is_array($token) || !in_array($token[0], [T_VARIABLE, T_STRING])) {
                     $token = next($tokens);
                 }
@@ -347,6 +348,14 @@ function convert_phptemplate($str)
                     prev($tokens);
                 }
 
+            } elseif ($name == T_ARRAY) {
+                $output .= '{';
+                $nesting[] = '}';
+                $flags[] = 'inside_array';
+            } elseif ($name == T_DOUBLE_ARROW) {
+                if (in_array('inside_array', $flags)) {
+                    $output .= ': ';
+                }
             } else {
                 // unsupported
                 echo "WARNING: UNSUPPORTED ".token_name($token[0])."\n";
@@ -378,8 +387,18 @@ function convert_phptemplate($str)
                     }
                     break;
 
-                case '(':
                 case ')':
+                    // Close function call
+                    if (in_array('inside_func_call', $flags)) {
+                        $output .= array_pop($nesting);
+                        unset($flags[array_search('inside_func_call', $flags)]);
+                    // Close array
+                    } else if (in_array('inside_array', $flags)) {
+                        $output .= array_pop($nesting);
+                        unset($flags[array_search('inside_array', $flags)]);
+                    }
+                    break;
+                case '(':
                 case ']':
                     // Ignored
                     break;
@@ -396,6 +415,9 @@ function convert_phptemplate($str)
                     if (in_array('inside_if', $flags)) {
                         $output .= '{% endif %}';
                         unset($flags[array_search('inside_if', $flags)]);
+                    } else if (in_array('inside_foreach', $flags)) {
+                        $output .= '{% endfor %}';
+                        unset($flags[array_search('inside_foreach', $flags)]);
                     }
                     break;
 
