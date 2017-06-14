@@ -253,7 +253,7 @@ function convert_phptemplate($str)
 
             } elseif ($name == T_IF) {
                 // There should be an expression after this, so we close it in ':' or '{'
-                $output .= '{% if';
+                $output .= '{% if ';
                 $nesting[] = '%}';
                 $flags[] = 'inside_condition';
                 $flags[] = 'inside_if';
@@ -411,13 +411,17 @@ function convert_phptemplate($str)
                     break;
 
                 case '}':
+                    $in_if = array_search('inside_if', $flags);
+                    $in_foreach = array_search('inside_foreach', $flags);
                     // This might close a if block
-                    if (in_array('inside_if', $flags)) {
+                    if ($in_if !== FALSE && ($in_foreach === FALSE || $in_if > $in_foreach) ) {
                         $output .= '{% endif %}';
-                        unset($flags[array_search('inside_if', $flags)]);
-                    } else if (in_array('inside_foreach', $flags)) {
+                        unset($flags[ $in_if ]);
+                        
+                    // Close foreach
+                    } else if ( $in_foreach !== FALSE ) {
                         $output .= '{% endfor %}';
-                        unset($flags[array_search('inside_foreach', $flags)]);
+                        unset($flags[ $in_foreach ]);
                     }
                     break;
 
